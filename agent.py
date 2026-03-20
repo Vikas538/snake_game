@@ -20,11 +20,11 @@ class Agent:
         self.gamma = 0.9        # discount factor
         self.memory = deque(maxlen=100_000)        # store past experiences
         self.model = SnakeNet()         # the neural network
-        self.trainer = Trainer(self.model,lr=0.001)        # the trainer
-
         if os.path.exists('model.pth'):
             self.model.load_state_dict(torch.load('model.pth'))
             print("Loaded saved model!")
+        self.trainer = Trainer(self.model,lr=0.001,gamma=0.9)        # the trainer
+
         
     def get_state(self, snake,food,direction):
         head = snake[0]
