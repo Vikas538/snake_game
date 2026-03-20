@@ -20,13 +20,17 @@ class Agent:
         self.gamma = 0.9        # discount factor
         self.memory = deque(maxlen=100_000)        # store past experiences
         self.model = SnakeNet()         # the neural network
+        self.snake = []             # current snake body (set in get_state)
+        self.best_score = 0
+        self.score_history = []
         if os.path.exists('model.pth'):
-            self.model.load_state_dict(torch.load('model.pth'))
             print("Loaded saved model!")
+            self.model.load_state_dict(torch.load('model.pth'))
         self.trainer = Trainer(self.model,lr=0.001,gamma=0.9)        # the trainer
 
         
-    def get_state(self, snake,food,direction):
+    def get_state(self, snake, food, direction):
+        self.snake = snake  # needed by is_collision for body checks
         head = snake[0]
         x, y = head
 
@@ -104,6 +108,18 @@ class Agent:
         # store experience in memory
         self.memory.append((state, action, reward, next_state, done))
 
+    def log_game(self, score):
+        self.score_history.append(score)
+        is_best = score > self.best_score
+        if is_best:
+            self.best_score = score
+        avg = sum(self.score_history[-50:]) / len(self.score_history[-50:])
+        print(
+            f"Game: {self.n_games:4d} | Score: {score:3d} | Best: {self.best_score:3d} | "
+            f"Avg(50): {avg:.1f} | Epsilon: {max(self.epsilon, 0):3d}"
+            + (" *** NEW BEST ***" if is_best else "")
+        )
+
     def train_long_memory(self):
         if len(self.memory) > 1000:
             sample = random.sample(self.memory, 1000)
@@ -111,8 +127,9 @@ class Agent:
             sample = list(self.memory)
 
         states, actions, rewards, next_states, dones = zip(*sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones)
+        loss = self.trainer.train_step(states, actions, rewards, next_states, dones)
         torch.save(self.model.state_dict(), 'model.pth')
-        print(f"Model saved!")
+        if self.n_games % 10 == 0:
+            print(f"  [replay loss: {loss:.4f}] model saved")
 
         

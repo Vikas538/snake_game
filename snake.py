@@ -60,7 +60,7 @@ food      = random_food(snake)
 score     = 0
 lives     = 0
 game_over = False
-
+steps_without_food =0 
 agent = Agent()
 
 # --- MAIN LOOP ---
@@ -75,7 +75,7 @@ while True:
     if not game_over:
 
         # 2. GET CURRENT STATE (11 inputs)
-        state = agent.get_state(snake, direction, food)
+        state = agent.get_state(snake, food, direction)
 
         # 3. GET ACTION ([1,0,0]=straight [0,1,0]=right [0,0,1]=left)
         action = agent.get_action(state)
@@ -99,13 +99,19 @@ while True:
                 reward = 10
                 score += 1
                 food = random_food(snake)
+                steps_without_food=0
             else:
+                steps_without_food+=1
                 snake.pop()
 
         # 8. GET NEW STATE AFTER MOVE
-        new_state = agent.get_state(snake, direction, food)
+        new_state = agent.get_state(snake, food, direction)
 
         # 9. TRAIN ON THIS STEP (short memory)
+        max_steps = 50 * len(snake)
+        if steps_without_food > max_steps:
+            reward = -10
+            game_over = True
         agent.train(state, action, reward, new_state, game_over)
 
     else:
@@ -113,8 +119,7 @@ while True:
         # 10. GAME OVER — train on all past memories (long memory)
         agent.train_long_memory()
         agent.n_games += 1
-
-        print(f"Game: {agent.n_games} | Score: {score}")
+        agent.log_game(score)
 
         # reset
         lives    += 1
@@ -145,4 +150,4 @@ while True:
     screen.blit(info, (10, 10))
 
     pygame.display.flip()
-    clock.tick(30)
+    clock.tick(10)
