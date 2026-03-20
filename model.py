@@ -4,9 +4,9 @@ import torch.nn as nn
 class SnakeNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(11, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 3)
+        self.fc1 = nn.Linear(11, 512)
+        self.fc2 = nn.Linear(512, 512)
+        self.fc3 = nn.Linear(512, 3)
         
     def forward(self, x):
         x = torch.relu(self.fc1(x))

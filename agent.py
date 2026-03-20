@@ -26,7 +26,7 @@ class Agent:
         if os.path.exists('model.pth'):
             print("Loaded saved model!")
             self.model.load_state_dict(torch.load('model.pth'))
-        self.trainer = Trainer(self.model,lr=0.001,gamma=0.9)        # the trainer
+        self.trainer = Trainer(self.model,lr=0.0005,gamma=0.9)        # the trainer
 
         
     def get_state(self, snake, food, direction):

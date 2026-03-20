@@ -2,3 +2,4 @@ myenv
 .python-version
 docker-compose.yml
 *pyc
+__pycache__
