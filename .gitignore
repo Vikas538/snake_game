@@ -1,3 +1,4 @@
 myenv
 .python-version
 docker-compose.yml
+*pyc

@@ -108,10 +108,11 @@ while True:
         new_state = agent.get_state(snake, food, direction)
 
         # 9. TRAIN ON THIS STEP (short memory)
-        max_steps = 50 * len(snake)
+        max_steps = 100 * len(snake)
         if steps_without_food > max_steps:
             reward = -10
             game_over = True
+            steps_without_food=0
         agent.train(state, action, reward, new_state, game_over)
 
     else:
