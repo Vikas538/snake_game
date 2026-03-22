@@ -123,6 +123,15 @@ class Agent:
         if point in snake:
             return True
         return False
+
+
+    def is_collision_static(self,snake, point):
+        x, y = point
+        if x < 0 or x >= WIDTH//CELL or y < 0 or y >= HEIGHT//CELL:
+            return True
+        if point in snake:
+            return True
+        return False
     
     def get_vision(self, snake, food_list, direction):
         head = snake[0]
@@ -179,6 +188,20 @@ class Agent:
         dir_d = int(direction == (0, 1))
         dir_u = int(direction == (0, -1))
         vision.extend([dir_r, dir_l, dir_d, dir_u])
+        total_cells = (WIDTH // CELL) * (HEIGHT // CELL)
+
+        spaces=[]
+        for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+            next_pos = (x+dx, y+dy)
+            if not self.is_collision_static(snake, next_pos):
+                space = self.count_reachable(snake, next_pos) / total_cells
+            else:
+                space = 0.0
+            spaces.append(space)
+            vision.append(space)
+
+        if random.random() < 0.001:
+            print(f"Spaces: {[f'{s:.2f}' for s in spaces]}")
 
         return vision
     

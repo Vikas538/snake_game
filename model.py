@@ -4,7 +4,7 @@ import torch.nn as nn
 class SnakeNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(28, 512)
+        self.fc1 = nn.Linear(32, 512)
         self.fc2 = nn.Linear(512, 512)
         self.fc3 = nn.Linear(512, 3)
         
