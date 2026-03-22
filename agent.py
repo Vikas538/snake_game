@@ -16,7 +16,7 @@ CELL = 30
 class Agent:
     def __init__(self):
         self.n_games = 0        # how many games played
-        self.epsilon = 0        # exploration rate
+        self.epsilon = 300        # exploration rate
         self.gamma = 0.9        # discount factor
         self.memory = deque(maxlen=100_000)        # store past experiences
         self.model = SnakeNet()         # the neural network
@@ -26,7 +26,26 @@ class Agent:
         if os.path.exists('model.pth'):
             print("Loaded saved model!")
             self.model.load_state_dict(torch.load('model.pth'))
-        self.trainer = Trainer(self.model,lr=0.0001,gamma=0.9)        # the trainer
+            self.epsilon = 0        
+        self.trainer = Trainer(self.model,lr=0.0001,gamma=0.9) 
+        self.important_moments =[]
+        self.boring_moments =[]       # the trainer
+
+    
+    def count_reachable(self,snake, start):
+        visited = set()
+        queue = [start]
+        visited.add(start)
+
+        while queue:
+            cx, cy = queue.pop(0)
+            for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
+                nx, ny = cx+dx, cy+dy
+                if (nx, ny) not in visited and not self.is_collision(snake, (nx, ny)):
+                    visited.add((nx, ny))
+                    queue.append((nx, ny))
+
+        return len(visited)
 
         
     def get_state(self, snake, food, direction):
@@ -73,7 +92,8 @@ class Agent:
         
     
     def get_action(self, state):
-        self.epsilon = max(10, 200 - self.n_games)
+        if self.epsilon > 10: # Stop at 10 to keep a little curiosity
+            self.epsilon-= 0.05
         action = [0, 0, 0]
 
         if random.randint(0, 200) < self.epsilon:
@@ -165,7 +185,11 @@ class Agent:
     
     def remember(self, state, action, reward, next_state, done):
         # store experience in memory
-        self.memory.append((state, action, reward, next_state, done))
+        if reward>=10 or reward <=-10:
+            self.important_moments.append((state, action, reward, next_state, done))
+        else :
+            self.boring_moments.append((state, action, reward, next_state, done))
+            
 
     def log_game(self, score):
         self.score_history.append(score)
@@ -175,20 +199,50 @@ class Agent:
         avg = sum(self.score_history[-50:]) / len(self.score_history[-50:])
         print(
             f"Game: {self.n_games:4d} | Score: {int(score):3d} | Best: {int(self.best_score):3d} | "
-            f"Avg(50): {avg:.1f} | Epsilon: {max(self.epsilon, 0):3d}"
+            f"Avg(50): {avg:.1f} | Epsilon: {max(self.epsilon, 0):3f}"
             + (" *** NEW BEST ***" if is_best else "")
         )
 
     def train_long_memory(self):
-        if len(self.memory) > 2000:
-            sample = random.sample(self.memory, 1000)
+        # Determine how many from each bucket we want (Target: 1000 total)
+        # We try to get 50% from each to keep a perfect balance of 'Danger/Reward' and 'Pathfinding'
+        target_size = 1000
+        important_size = 500
+        
+        # 1. Handle Important Moments
+        if len(self.important_moments) > important_size:
+            imp_sample = random.sample(self.important_moments, important_size)
         else:
-            sample = list(self.memory)
+            imp_sample = self.important_moments # Take all we have if it's less than 500
+            
+        # 2. Handle Boring Moments (Fill the rest of the target size)
+        remaining_needed = target_size - len(imp_sample)
+        if len(self.boring_moments) > remaining_needed:
+            bor_sample = random.sample(self.boring_moments, remaining_needed)
+        else:
+            bor_sample = self.boring_moments
+            
+        # 3. Combine them
+        sample = imp_sample + bor_sample
+        
+        # If we have zero memories total (shouldn't happen), skip training
+        if not sample:
+            return
 
+        # 4. Standard Training Logic
         states, actions, rewards, next_states, dones = zip(*sample)
         loss = self.trainer.train_step(states, actions, rewards, next_states, dones)
+        
+        # 5. Maintenance: Prevent memory from growing infinitely
+        # Since we aren't using a deque anymore, we must manually trim the lists
+        if len(self.boring_moments) > 50000:
+            self.boring_moments = self.boring_moments[-30000:]
+        if len(self.important_moments) > 20000:
+            self.important_moments = self.important_moments[-10000:]
+
+        # 6. Save & Log
         torch.save(self.model.state_dict(), 'model.pth')
         if self.n_games % 10 == 0:
-            print(f"  [replay loss: {loss:.4f}] model saved")
+            print(f"  [replay loss: {loss:.4f}] model saved | Mem: {len(self.important_moments)}I/{len(self.boring_moments)}B")
 
         

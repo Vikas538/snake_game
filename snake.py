@@ -91,7 +91,7 @@ while True:
             reward =-10
             game_over = True
         else:
-            reward+=0.0005
+            
             snake.insert(0, new_head)
             if new_head in food_list:
                 reward+= 10
@@ -102,23 +102,28 @@ while True:
                 # Safety: if ALL food is gone, spawn 1 so the game doesn't break
                 if len(food_list) == 0:
                     food_list.append(random_food(snake, []))
+                # if len(food_list) ==0:
+                #     food_list=[random_food(snake, []) for _ in range(40)]
             else:
                 # Check new distance to nearest food
                 new_min_dist = min([abs(new_head[0] - f[0]) + abs(new_head[1] - f[1]) for f in food_list])
                 
                 # Small nudge: reward for getting closer, penalty for moving away
-                reward+= 0.0005
-                if new_min_dist < old_min_dist :
-                    reward+=0.01
-                else:
-                    reward-=0.012
+                # if steps_without_food > 0 and steps_without_food % 5 == 0:
+                #     reward += 0.001
+                # else:
+                #     reward-=0.0005
+                # if new_min_dist < old_min_dist :
+                #     reward+=0.02
+                # else:
+                #     reward-=0.025
                 
                 steps_without_food += 1
                 snake.pop()
 
         # 8. HUNGER LIMIT (Starvation)
         # We give it more time if food is scarce
-        hunger_limit = 100 + (len(snake) * 10)
+        hunger_limit = 100 + (len(snake) * 5)
         if steps_without_food > hunger_limit:
             reward = -10
             game_over = True
@@ -164,4 +169,4 @@ while True:
     screen.blit(info, (10, 10))
 
     pygame.display.flip()
-    clock.tick(30) # 30 FPS is good for watching it learn
+    clock.tick(0) # 30 FPS is good for watching it learn
