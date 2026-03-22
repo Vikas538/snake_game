@@ -2,66 +2,60 @@ import pygame
 import random
 from agent import Agent
 
-# --- SETUP ---
+# --- SETTINGS ---
+WIDTH, HEIGHT, CELL = 600, 600, 30
 pygame.init()
-
-WIDTH = 600
-HEIGHT = 600
-CELL = 30
-
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Self Playing Snake - Neural Network")
-
+pygame.display.set_caption("Self-Playing Snake: Curriculum Learning")
 clock = pygame.time.Clock()
-game_font = pygame.font.SysFont("Arial", 20)
+font = pygame.font.SysFont("Arial", 20)
 
 # --- COLORS ---
 BLACK        = (0, 0, 0)
-GREEN        = (0, 200, 0)
-BRIGHT_GREEN = (0, 255, 0)
-RED          = (200, 0, 0)
 WHITE        = (255, 255, 255)
+RED          = (200, 0, 0)
+GREEN        = (0, 200, 0)
+HEAD_COLOR   = (0, 255, 100)
 GRAY         = (40, 40, 40)
 
 # --- HELPERS ---
-def random_food(snake):
+def random_food(snake, existing_foods):
     while True:
-        x = random.randint(0, WIDTH // CELL - 1)
-        y = random.randint(0, HEIGHT // CELL - 1)
-        if (x, y) not in snake:
-            return (x, y)
+        p = (random.randint(0, WIDTH // CELL - 1), random.randint(0, HEIGHT // CELL - 1))
+        if p not in snake and p not in existing_foods:
+            return p
 
-def is_collision(snake, point):
-    x, y = point
-    # wall check
-    if x < 0 or x >= WIDTH // CELL or y < 0 or y >= HEIGHT // CELL:
+def is_collision(snake, p):
+    # Wall check
+    if p[0] < 0 or p[0] >= WIDTH // CELL or p[1] < 0 or p[1] >= HEIGHT // CELL:
         return True
-    # body check
-    if point in snake:
+    # Body check
+    if p in snake:
         return True
     return False
 
 def action_to_direction(action, current_direction):
-    # clockwise: RIGHT, DOWN, LEFT, UP
+    # Clockwise order: Right, Down, Left, Up
     clock_wise = [(1, 0), (0, 1), (-1, 0), (0, -1)]
     idx = clock_wise.index(current_direction)
 
-    if action == [1, 0, 0]:        # straight
+    if action == [1, 0, 0]:    # Straight
         return clock_wise[idx]
-    elif action == [0, 1, 0]:      # turn right
+    elif action == [0, 1, 0]:  # Turn Right
         return clock_wise[(idx + 1) % 4]
-    else:                          # turn left
+    else:                      # Turn Left
         return clock_wise[(idx - 1) % 4]
 
-# --- INITIALIZE ---
-snake     = [(5, 5), (4, 5), (3, 5)]
-direction = (1, 0)
-food      = random_food(snake)
-score     = 0
-lives     = 0
-game_over = False
-steps_without_food =0 
+# --- INITIALIZE GAME ---
 agent = Agent()
+snake = [(5, 5), (4, 5), (3, 5)]
+direction = (1, 0)
+score = 0
+steps_without_food = 0
+game_over = False
+
+# Create the permanent food list (starts with 40)
+food_list = [random_food(snake, []) for _ in range(40)]
 
 # --- MAIN LOOP ---
 while True:
@@ -73,82 +67,106 @@ while True:
             exit()
 
     if not game_over:
+        reward = 0
+        # 2. GET CURRENT STATE (28 inputs)
+        state = agent.get_vision(snake, food_list, direction)
 
-        # 2. GET CURRENT STATE (11 inputs)
-        state = agent.get_state(snake, food, direction)
-
-        # 3. GET ACTION ([1,0,0]=straight [0,1,0]=right [0,0,1]=left)
+        # 3. GET ACTION
         action = agent.get_action(state)
 
-        # 4. CONVERT ACTION TO DIRECTION
+        # 4. UPDATE DIRECTION
         direction = action_to_direction(action, direction)
 
-        # 5. CALCULATE NEW HEAD
-        new_head = (snake[0][0] + direction[0], snake[0][1] + direction[1])
+        # 5. CALCULATE DISTANCE TO NEAREST FOOD (For Reward Shaping)
+        head = snake[0]
+        # Get distances to all remaining food pieces
+        dists = [abs(head[0] - f[0]) + abs(head[1] - f[1]) for f in food_list]
+        old_min_dist = min(dists) if dists else 0
 
-        # 6. DEFAULT REWARD
-        reward = 1  # survived one step
+        # 6. MOVE HEAD
+        new_head = (head[0] + direction[0], head[1] + direction[1])
 
-        # 7. CHECK COLLISIONS
+        # 7. CHECK COLLISIONS & EATING
         if is_collision(snake, new_head):
-            reward    = -10
+            reward =-10
             game_over = True
         else:
+            
             snake.insert(0, new_head)
-            if new_head == food:
-                reward = 10
+            if new_head in food_list:
+                reward+= 10
                 score += 1
-                food = random_food(snake)
-                steps_without_food=0
+                food_list.remove(new_head) # Food is gone forever
+                steps_without_food = 0
+                
+                # Safety: if ALL food is gone, spawn 1 so the game doesn't break
+                if len(food_list) == 0:
+                    food_list.append(random_food(snake, []))
+                # if len(food_list) ==0:
+                #     food_list=[random_food(snake, []) for _ in range(40)]
             else:
-                steps_without_food+=1
+                # Check new distance to nearest food
+                new_min_dist = min([abs(new_head[0] - f[0]) + abs(new_head[1] - f[1]) for f in food_list])
+                
+                # Small nudge: reward for getting closer, penalty for moving away
+                # if steps_without_food > 0 and steps_without_food % 5 == 0:
+                #     reward += 0.001
+                # else:
+                #     reward-=0.0005
+                # if new_min_dist < old_min_dist :
+                #     reward+=0.02
+                # else:
+                #     reward-=0.025
+                
+                steps_without_food += 1
                 snake.pop()
 
-        # 8. GET NEW STATE AFTER MOVE
-        new_state = agent.get_state(snake, food, direction)
-
-        # 9. TRAIN ON THIS STEP (short memory)
-        max_steps = 50 * len(snake)
-        if steps_without_food > max_steps:
+        # 8. HUNGER LIMIT (Starvation)
+        # We give it more time if food is scarce
+        hunger_limit = 100 + (len(snake) * 5)
+        if steps_without_food > hunger_limit:
             reward = -10
             game_over = True
-            steps_without_food=0
+
+        # 9. TRAIN SHORT MEMORY
+        new_state = agent.get_vision(snake, food_list, direction)
         agent.train(state, action, reward, new_state, game_over)
 
     else:
-
-        # 10. GAME OVER — train on all past memories (long memory)
+        # 10. RESET FOR NEXT GAME
         agent.train_long_memory()
         agent.n_games += 1
         agent.log_game(score)
 
-        # reset
-        lives    += 1
-        score     = 0
-        snake     = [(5, 5), (4, 5), (3, 5)]
+        # Reset snake and score, but KEEP the depleted food_list
+        score = 0
+        steps_without_food = 0
+        snake = [(5, 5), (4, 5), (3, 5)]
         direction = (1, 0)
-        food      = random_food(snake)
         game_over = False
+        pygame.time.wait(200)
 
-        pygame.time.wait(300)
-
-    # 11. DRAW
+    # 11. DRAWING
     screen.fill(BLACK)
 
+    # Draw Grid
     for x in range(0, WIDTH, CELL):
         pygame.draw.line(screen, GRAY, (x, 0), (x, HEIGHT))
     for y in range(0, HEIGHT, CELL):
         pygame.draw.line(screen, GRAY, (0, y), (WIDTH, y))
 
-    pygame.draw.rect(screen, RED, (food[0] * CELL, food[1] * CELL, CELL, CELL))
+    # Draw all food in the list
+    for f in food_list:
+        pygame.draw.rect(screen, RED, (f[0] * CELL, f[1] * CELL, CELL, CELL))
 
+    # Draw Snake
     for i, seg in enumerate(snake):
-        color = BRIGHT_GREEN if i == 0 else GREEN
+        color = HEAD_COLOR if i == 0 else GREEN
         pygame.draw.rect(screen, color, (seg[0] * CELL, seg[1] * CELL, CELL, CELL))
-        pygame.draw.rect(screen, BLACK, (seg[0] * CELL, seg[1] * CELL, CELL, CELL), 1)
 
-    info = game_font.render(f"Score: {score} | Game: {agent.n_games} | Epsilon: {agent.epsilon}", True, WHITE)
+    # Info display
+    info = font.render(f"Food Left: {len(food_list)} | Game: {agent.n_games} | Score: {score} | reward :{reward}", True, WHITE)
     screen.blit(info, (10, 10))
 
     pygame.display.flip()
-    clock.tick(10)
+    clock.tick(0) # 30 FPS is good for watching it learn
